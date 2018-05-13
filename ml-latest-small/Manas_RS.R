@@ -6,24 +6,40 @@ setwd ("C:\\Users\\Manas Ranjan Goth\\BDVA Program\\RecommenderSystems\\Project\
 library(recommenderlab)
 library(reshape2)
 library(ggplot2)
+library(splitstackshape)
+library(gsubfn)
+library(sqldf)
 # Read training file along with header
 inputdata<-read.csv("ratings.csv",header=TRUE)
 # Just look at first few lines of this file
-head(inputdata)
-#setting seed
-set.seed(12)
-
-# shuffling the dataset 
-inputdata <- inputdata[sample(n),]
 head(inputdata)
 
 # Remove 'timestamp' column. We do not need it
 inputdata<-inputdata[,-c(4)]
 
-# Splitting the data into train and test
-tr <- inputdata[1:round(0.8*nrow(inputdata)),]
-te  <- inputdata[(round(0.8*nrow(inputdata))+1):nrow(inputdata),]
+#Taking stratified sampling from the data set based on user id . Taking 80% data to train the model.
+tr = stratified(inputdata, "userId", .8)
+# te is the validation data set . Taking the remaining 20% of the data to test the model output.
+te = sqldf("select * from inputdata except select * from tr")
 
+
+#set.seed(1)
+#tr = stratified(inputdata, , .8, seed = 1)
+#setting seed
+#set.seed(12)
+
+# shuffling the dataset 
+#inputdata <- inputdata[sample(n),]
+#head(inputdata)
+
+
+
+# Splitting the data into train and test
+#tr <- inputdata[1:round(0.8*nrow(inputdata)),]
+#te  <- inputdata[(round(0.8*nrow(inputdata))+1):nrow(inputdata),]
+#tr <- inputdata[,-c(4)]
+
+head(te)
 
 # Using acast to convert above data as follows:
 #       m1  m2   m3   m4
@@ -41,10 +57,7 @@ R<-as.matrix(g)
 r <- as(R, "realRatingMatrix")
 r
 
-# normalize the rating matrix
-r_m <- normalize(r)
-r_m
-as(r_m, "list")[0:1]
+
 
 # Create a recommender object (model)
 #   Run anyone of the following four code lines.
@@ -68,51 +81,20 @@ getModel(rec)$method
 # This prediction does not predict movie ratings for test.
 #   But it fills up the user 'X' item matrix so that
 #    for any userid and movieid, I can find predicted rating
-#     dim(r) shows there are <CHANGE REQUIRED HERE> users (rows)
 #      'type' parameter decides whether you want ratings or top-n items
-#         get top-10 recommendations for a user, as:
-#             predict(rec, r[1:nrow(r)], type="topNList", n=10)
+#         we will go for ratings
 recom <- predict(rec, r[1:nrow(r)], type="ratings")
 recom
 
 
-# Convert prediction into list, user-wise
-#as(recom, "list")
-# Study and Compare the following:
-#as(r, "matrix")     # Has lots of NAs. 'r' is the original matrix
-#as(recom, "matrix") # Is full of ratings. NAs disappear
-#as(recom, "matrix")[,1:10] # Show ratings for all users for items 1 to 10
-#as(recom, "matrix")[5,3]   # Rating for user 5 for item at index 3
-#as.integer(as(recom, "matrix")[5,3]) # Just get the integer value
-#as.integer(round(as(recom, "matrix")[6039,8])) # Just get the correct integer value
-#as.integer(round(as(recom, "matrix")[368,3717])) 
-
 # Convert all your recommendations to list structure
 rec_list<-as(recom,"list")
 head(summary(rec_list))
-# Access this list. User 2, item at index 2
-#rec_list[[2]][2]
 
-# Convert to data frame all recommendations for user 1
-u1<-as.data.frame(rec_list[[1]])
-attributes(u1)
-class(u1)
-# Create a column by name of id in data frame u1 and populate it with row names
-u1$id<-row.names(u1)
-# Check movie ratings are in column 1 of u1
-u1
-# Now access movie ratings in column 1 for u1
-#u1[u1$id==3952,1]
+
 
 ########## Create submission File from model #######################
-# Read test file
-test<-read.csv("ratings.csv",header=TRUE)
-# Just look at first few lines of this file
-head(test)
-# Remove 'id' column. We do not need it
-test<-test[,-c(4)]
-#head(test)
-
+# We will create 3 files by running the model 3 times using 3 different similarity Jaccard,Cosine, Pearson
 # Get ratings list
 rec_list<-as(recom,"list")
 head(summary(rec_list))
