@@ -19,27 +19,12 @@ inputdata<-inputdata[,-c(4)]
 
 #Taking stratified sampling from the data set based on user id . Taking 80% data to train the model.
 tr = stratified(inputdata, "userId", .8)
-# te is the validation data set . Taking the remaining 20% of the data to test the model output.
+# te is the testing data set . Taking the remaining 20% of the data to test the model output.
 te = sqldf("select * from inputdata except select * from tr")
 
 
-#set.seed(1)
-#tr = stratified(inputdata, , .8, seed = 1)
-#setting seed
-#set.seed(12)
 
-# shuffling the dataset 
-#inputdata <- inputdata[sample(n),]
-#head(inputdata)
-
-
-
-# Splitting the data into train and test
-#tr <- inputdata[1:round(0.8*nrow(inputdata)),]
-#te  <- inputdata[(round(0.8*nrow(inputdata))+1):nrow(inputdata),]
-#tr <- inputdata[,-c(4)]
-
-head(te)
+head(tr)
 
 # Using acast to convert above data as follows:
 #       m1  m2   m3   m4
@@ -72,10 +57,6 @@ rec=Recommender(r[1:nrow(r)],method="UBCF", param=list(normalize = "Z-score",met
 rec=Recommender(r[1:nrow(r)],method="UBCF", param=list(normalize = "Z-score",method="Pearson",nn=5,minRating=1))
 
 
-# Depending upon your selection, examine what you got
-print(rec)
-names(getModel(rec))
-getModel(rec)$method
 
 ############Create predictions#############################
 # This prediction does not predict movie ratings for test.
@@ -93,11 +74,16 @@ head(summary(rec_list))
 
 
 
-########## Create submission File from model #######################
+
+
+
+
+########## Create prediction file from model #######################
 # We will create 3 files by running the model 3 times using 3 different similarity Jaccard,Cosine, Pearson
 # Get ratings list
 rec_list<-as(recom,"list")
 head(summary(rec_list))
+
 ratings<-NULL
 
 # For all lines in test file, one by one
@@ -115,10 +101,8 @@ for ( u in 1:length(te[,1]))
   u1$id<-row.names(u1)
   # Now access movie ratings in column 1 of u1
   x= u1[u1$id==movieid,1]
-  # print(u)
-  # print(length(x))
-  # If no ratings were found, assign 0. You could also
-  #   assign user-average
+
+  # If no ratings were found, assign 0. 
   if (length(x)==0)
   {
     ratings[u] <- 0
@@ -132,6 +116,54 @@ for ( u in 1:length(te[,1]))
 length(ratings)
 tx<-cbind(te[,1:3],round(ratings))
 # Write to a csv file: submitfile.csv in your folder
-write.table(tx,file="submitfile.csv",row.names=FALSE,col.names=FALSE,sep=',')
+write.table(tx,file="submitfile_pearson.csv",row.names=FALSE,col.names=FALSE,sep=',')
 # Submit now this csv file to kaggle
+
+######################################################################
+#### To check the performance of the 3 models we will calculate NMAE:
+######################################################################
+#define a MAE function : 
+mae <- function(error)
+{
+  mean(abs(error))
+}
+
+#For cosine
+cosinedata <- read.csv("submitfile_cosine.csv", header = FALSE)
+cosine_actual <- cosinedata[,3]
+cosine_predicted <- cosinedata[,4]
+error_cosine <-  cosine_predicted - cosine_actual 
+# MAE = Sum(|predicted - real |)/ n
+mae_cosine <- mae(error_cosine)
+
+
+# The Min and Max ratings are common for all three models as the testing set is same across all 3 models
+max_rating = max(cosine_actual)
+min_rating = min(cosine_actual)
+
+#NMAE = MAE/ (max rating - min rating)
+NMAE_cosine <- mae_cosine / (max_rating - min_rating )
+#NMAE_cosine = 0.184677
+
+#For jaccard
+jaccarddata <- read.csv("submitfile_jaccard.csv", header = FALSE)
+jaccard_actual <- jaccarddata[,3]
+jaccard_predicted <- jaccarddata[,4]
+error_jaccard <-  jaccard_predicted - jaccard_actual 
+# MAE = Sum(|predicted - real |)/ n
+mae_jaccard <- mae(error_jaccard)
+#NMAE = MAE/ (max rating - min rating)
+NMAE_jaccard <- mae_jaccard / (max_rating - min_rating )
+#NMAE_jaccard 0.1844334
+
+#For pearson
+pearsondata <- read.csv("submitfile_pearson.csv", header = FALSE)
+pearson_actual <- pearsondata[,3]
+pearson_predicted <- pearsondata[,4]
+error_pearson <-    pearson_predicted - pearson_actual 
+# MAE = Sum(|predicted - real |)/ n
+mae_pearson <- mae(error_pearson )
+#NMAE = MAE/ (max rating - min rating)
+NMAE_pearson <- mae_pearson / (max_rating - min_rating )
+#NMAE_pearson 0.1846112
 
